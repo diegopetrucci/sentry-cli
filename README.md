@@ -26,6 +26,10 @@ Trigger the skill when the user needs help with Sentry CLI workflows:
 - **Claude Code:** `/sentry-cli`
 - Or say: "create a Sentry release", "upload dSYMs", "upload source maps to Sentry", or "record a Sentry deploy"
 
+## More Skills Like This
+
+Found this skill useful? Browse all my hand-crafted ones in the [AI Agents skills](https://github.com/diegopetrucci/ai-agents-skills) repo.
+
 ## License
 
 MIT
