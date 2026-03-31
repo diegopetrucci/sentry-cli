@@ -1,0 +1,5 @@
+{
+  "name": "sentry-cli",
+  "description": "Interface with Sentry's error reporting from agents",
+  "version": "1.0.0"
+}
