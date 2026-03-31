@@ -15,17 +15,17 @@ When working with Sentry through the command line, this skill helps with:
 
 ## Installation
 
+### As a skill
+
+```bash
+npx skills add https://github.com/diegopetrucci/sentry-cli --skill sentry-cli
+```
+
 ### As a Claude Code plugin
 
 ```shell
 /plugin marketplace add diegopetrucci/ai-agents-skills
 /plugin install sentry-cli@diegopetrucci-claude-plugins
-```
-
-### As a skill
-
-```bash
-npx skills add https://github.com/diegopetrucci/sentry-cli --skill sentry-cli
 ```
 
 ## Usage
