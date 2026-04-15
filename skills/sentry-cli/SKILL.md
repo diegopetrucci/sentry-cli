@@ -1,100 +1,226 @@
 ---
 name: sentry-cli
-description: Sentry CLI tool for error tracking and monitoring workflows. Use when working with Sentry for (1) Creating and managing releases, (2) Uploading debug symbols (dSYMs) for iOS/mobile crash reporting, (3) Uploading source maps for JavaScript/web applications, (4) Associating commits with releases for issue tracking, (5) Managing deploys across environments, (6) Validating debug information files, or any other Sentry-related development and deployment tasks. Assumes sentry-cli is installed via brew and user is authenticated.
+description: Sentry CLI tool for iOS error tracking and monitoring workflows. Use when working with Sentry for (1) Listing and investigating issues and crashes, (2) Uploading debug symbols (dSYMs) for crash report symbolication, (3) Creating and managing releases, (4) Associating commits with releases for issue tracking, (5) Managing deploys across environments, (6) Viewing logs and monitoring cron jobs, (7) Sending test events, or any other Sentry-related iOS development and deployment tasks. Also use when the user mentions "sentry", "crashes", "dSYMs", "symbolication", "debug files", or "crash reports".
 license: MIT
 metadata:
   author: Diego Petrucci
-  version: "1.0"
+  version: "2.0"
 ---
 
-# Sentry CLI
+# sentry-cli for iOS
 
-## Overview
-
-Work with Sentry's error tracking and monitoring platform through the command-line interface. Handle release management, debug symbol uploads for crash reporting, source map uploads for JavaScript error tracking, and deployment tracking across environments.
-
-## Quick Start
-
-Determine which Sentry workflow you need:
-
-**Release Management** -> Creating new releases, associating commits, tracking versions
-**Debug Symbols (iOS/Mobile)** -> Uploading dSYMs for crash report symbolication
-**Source Maps (Web/JavaScript)** -> Uploading source maps for JavaScript error tracking
-**Deploys** -> Recording deployments to specific environments
-
-All commands assume `SENTRY_ORG` and `SENTRY_PROJECT` are configured via environment variables or config file. If not, add `-o <org> -p <project>` flags to commands.
-
-## Release Management
-
-### Creating Releases
-
-Create a release to track which code version is deployed:
+## Installation
 
 ```bash
-# Auto-determine version from git
-VERSION=$(sentry-cli releases propose-version)
-sentry-cli releases new "$VERSION"
+# macOS (recommended)
+brew install getsentry/tools/sentry-cli
 
-# Or use explicit version
-sentry-cli releases new "1.0.0"
+# npm
+npm install -g @sentry/cli
 
-# Create and finalize immediately
-sentry-cli releases new "$VERSION" --finalize
+# curl (macOS/Linux)
+curl -sL https://sentry.io/get-cli/ | sh
+
+# Pin a specific version
+curl -sL https://sentry.io/get-cli/ | SENTRY_CLI_VERSION="3.3.5" sh
 ```
 
-### Associating Commits
+Update or uninstall:
+```bash
+sentry-cli update
+sentry-cli uninstall
+```
 
-Link commits to releases for issue tracking and suspect commit identification:
+## Configuration
+
+sentry-cli loads configuration from multiple sources (in order of precedence): command-line flags, environment variables, `.sentryclirc` in the current directory (searched upward), and `~/.sentryclirc`.
+
+### Project config file (`.sentryclirc` in project root)
+
+```ini
+[auth]
+token=<your-auth-token>
+
+[defaults]
+org=<your-org>
+project=<your-project>
+```
+
+### Environment variables
 
 ```bash
-# Automatic (requires repository integration)
-sentry-cli releases set-commits "$VERSION" --auto
+export SENTRY_AUTH_TOKEN="<your-auth-token>"
+export SENTRY_ORG="<your-org>"
+export SENTRY_PROJECT="<your-project>"
+```
 
-# Local git (no repository integration needed)
+### Interactive login
+
+```bash
+sentry-cli login
+
+# For self-hosted Sentry
+sentry-cli --url https://your-sentry.example.com/ login
+```
+
+### Setup verification
+
+Verify auth, org, project, and scopes:
+
+```bash
+sentry-cli info
+```
+
+If the output shows missing scopes or auth errors, the token may need to be regenerated in Sentry (Settings > Auth Tokens).
+
+Key scopes needed:
+- `project:read` / `project:write` — releases
+- `event:read` — issues and events
+- `org:read` — org-level queries
+
+## Commands
+
+### List issues
+
+#### Basic usage
+
+```bash
+# Recent unresolved issues
+sentry-cli issues list -s unresolved --max-rows 10 --pages 1
+
+# All issues (including ignored/resolved)
+sentry-cli issues list --max-rows 10 --pages 1
+
+# A specific issue by ID
+sentry-cli issues list -i <ISSUE_ID>
+```
+
+#### CLI flags
+
+| Flag | Description |
+|---|---|
+| `--max-rows N` | Limit output to N rows |
+| `--pages N` | Max pages to fetch (100 issues/page, default: 5) |
+| `-s STATUS` | Filter by status: `resolved`, `muted`, `unresolved` |
+| `--query QUERY` | Sentry search query (see syntax below) |
+| `-i ID` | Fetch a specific issue by numeric ID |
+
+#### Query syntax (`--query`)
+
+The `--query` flag accepts Sentry's structured search syntax. Combine multiple filters — they AND together by default.
+
+**By status and severity:**
+```bash
+--query "is:unresolved"
+--query "is:unresolved level:fatal"
+--query "is:unresolved level:error"
+```
+
+`is:` values: `unresolved`, `resolved`, `archived`, `assigned`, `unassigned`, `for_review`
+`level:` values: `fatal`, `error`, `warning`, `info`
+
+**By error type and handling:**
+```bash
+--query "error.type:NSInvalidArgumentException"
+--query "error.unhandled:true"
+--query "error.main_thread:true"
+```
+
+**By release and environment:**
+```bash
+--query "release:<bundle-id>@<version>+<build>"
+--query "release.package:<bundle-id>"
+```
+
+**By device and platform:**
+```bash
+--query "device.family:iPhone"
+--query "os.build:22A3354"
+--query "app.in_foreground:true"
+```
+
+**By time:**
+```bash
+--query "age:-24h"              # first seen in the last 24 hours
+--query "lastSeen:-1w"          # seen in the last week
+--query "firstSeen:+30d"        # first seen more than 30 days ago
+--query "timesSeen:>100"        # seen more than 100 times
+```
+
+Time suffixes: `m` (minutes), `h` (hours), `d` (days), `w` (weeks). `-` means "within the last", `+` means "older than".
+
+**By stack trace:**
+```bash
+--query "stack.module:<ModuleName>"
+--query "stack.function:<functionName>"
+--query "stack.filename:<FileName>.swift"
+```
+
+**By user:**
+```bash
+--query "user.id:<user-id>"
+--query "assigned:me"
+--query "assigned:#<team-slug>"
+```
+
+**Operators:**
+- Negation: `!user.email:test@example.com`
+- Comparison: `timesSeen:>100`, `timesSeen:<=10`
+- Wildcards: `error.type:NS*Exception`
+- Lists: `release:[1.0, 2.0]` (OR)
+- Has field: `has:user.email`
+
+**Combining filters:**
+```bash
+# Fatal crashes on a specific app in the last 7 days
+--query "is:unresolved level:fatal release.package:<bundle-id> lastSeen:-7d"
+
+# Unhandled errors in a specific module
+--query "is:unresolved error.unhandled:true stack.module:<ModuleName>"
+```
+
+#### Sorting by frequency (API only)
+
+The CLI does not support sorting. For frequency-based ranking (most events first), use the Sentry API directly:
+
+```bash
+# Top 5 unresolved issues by event count
+curl -sH "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+  "https://sentry.io/api/0/projects/<org>/<project>/issues/?sort=freq&query=is:unresolved" \
+  | jq '.[0:5] | .[] | {id: .id, shortId: .shortId, title: .title, count: .count}'
+
+# Top fatal crashes by frequency
+curl -sH "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+  "https://sentry.io/api/0/projects/<org>/<project>/issues/?sort=freq&query=is:unresolved+level:fatal" \
+  | jq '.[0:5] | .[] | {id: .id, shortId: .shortId, title: .title, count: .count, lastSeen: .lastSeen}'
+
+# Sort options: freq (frequency), date (last seen), new (first seen), priority (Sentry priority)
+```
+
+### List releases
+
+```bash
+sentry-cli releases list
+```
+
+### Create and finalize a release
+
+```bash
+VERSION="<bundle-id>@<version>+<build>"
+
+sentry-cli releases new "$VERSION"
 sentry-cli releases set-commits "$VERSION" --local
-
-# Ignore missing commits (for rebased/amended commits)
-sentry-cli releases set-commits "$VERSION" --auto --ignore-missing
-```
-
-### Finalizing Releases
-
-Finalize after all build artifacts are uploaded:
-
-```bash
 sentry-cli releases finalize "$VERSION"
 ```
 
-**When to finalize:** After uploading all debug symbols, source maps, and other artifacts. Finalization adds a timestamp that affects issue resolution tracking.
+Use `--auto` instead of `--local` if the GitHub/GitLab repository integration is configured in Sentry.
 
-### Typical Release Workflow
-
-```bash
-# 1. Create release
-VERSION=$(sentry-cli releases propose-version)
-sentry-cli releases new "$VERSION"
-
-# 2. Upload artifacts (debug symbols, source maps, etc.)
-# ... see sections below ...
-
-# 3. Associate commits
-sentry-cli releases set-commits "$VERSION" --auto
-
-# 4. Finalize
-sentry-cli releases finalize "$VERSION"
-
-# 5. Record deploy (see Deploys section)
-```
-
-## Debug Information Files (iOS/Mobile)
-
-### Uploading Debug Symbols
-
-Upload dSYMs and other debug files for crash symbolication:
+### Upload dSYMs
 
 ```bash
-# Basic upload (recursively scans directory)
-sentry-cli debug-files upload /path/to/dsyms
+# From an xcarchive
+sentry-cli debug-files upload --include-sources \
+  /path/to/App.xcarchive/dSYMs
 
 # With server-side processing wait
 sentry-cli debug-files upload --wait /path/to/dsyms
@@ -104,200 +230,133 @@ sentry-cli debug-files upload \
   --symbol-maps /path/to/BCSymbolMaps \
   /path/to/dsyms
 
-# With source bundles for source context
-sentry-cli debug-files upload --include-sources /path/to/dsyms
-```
+# Validate before uploading
+sentry-cli debug-files check /path/to/dSYM
 
-### Validating Debug Files
-
-Check if debug files are valid before uploading:
-
-```bash
-sentry-cli debug-files check /path/to/file.dSYM
-```
-
-### Finding Missing Debug Files
-
-When crash reports show missing symbols:
-
-```bash
+# Find missing debug files when crashes show unsymbolicated addresses
 sentry-cli debug-files find <debug-identifier>
 ```
 
-### iOS Build Integration
+### List events
 
-For Xcode projects, typically integrate into build phases:
-
-```bash
-# After archive/export, upload dSYMs
-DSYM_PATH="$DWARF_DSYM_FOLDER_PATH"
-sentry-cli debug-files upload --wait "$DSYM_PATH"
-```
-
-## Source Maps (Web/JavaScript)
-
-### Uploading Source Maps
-
-Upload source maps for JavaScript error tracking:
+Events are individual occurrences — more granular than issues (which group related events together).
 
 ```bash
-# Basic upload
-sentry-cli sourcemaps upload /path/to/build
+# Recent events
+sentry-cli events list --max-rows 10 --pages 1
 
-# With URL prefix (maps file paths to deployed URLs)
-sentry-cli sourcemaps upload \
-  --url-prefix '~/static/js' \
-  /path/to/build
-
-# Strip common prefix for cleaner paths
-sentry-cli sourcemaps upload \
-  --url-prefix '~/static/js' \
-  --strip-common-prefix \
-  /path/to/build
-
-# With distribution identifier (for multiple build variants)
-sentry-cli sourcemaps upload \
-  --dist "$BUILD_ID" \
-  /path/to/build
+# Include user info and tags
+sentry-cli events list --max-rows 10 -U -T
 ```
 
-### Key Options
+| Flag | Description |
+|---|---|
+| `--max-rows N` | Limit output rows |
+| `--pages N` | Max pages (100 events/page, default: 5) |
+| `-U` / `--show-user` | Show the user column |
+| `-T` / `--show-tags` | Show the tags column |
 
-- `--url-prefix`: Match deployed asset URLs (e.g., `~/static/js` or `https://example.com/js`)
-- `--strip-common-prefix`: Simplify path mappings by removing common prefixes
-- `--dist`: Differentiate build variants (use same value in Sentry SDK configuration)
-- `--ignore-file`: Exclude files using `.sentryignore` patterns
-- `--strict`: Fail if no source maps found
-- `--validate`: Enable validation when using `--no-rewrite`
+### Send a test event
 
-### Build Tool Integration
-
-Typically integrate into build scripts:
+Manually fire an event to verify the pipeline works end-to-end. Useful after setting up auth or changing SDK configuration.
 
 ```bash
-# After production build
-npm run build
+# Simple test error
+sentry-cli send-event -m "Test event from sentry-cli"
 
-# Upload source maps
-sentry-cli sourcemaps upload \
-  --url-prefix '~/static/js' \
-  --strip-common-prefix \
-  build/static/js
+# With severity level
+sentry-cli send-event -m "Test warning" -l warning
+
+# With tags and extra data
+sentry-cli send-event -m "Test from CI" -t environment:staging -e build_number:123
+
+# Attach a release
+sentry-cli send-event -m "Test event" -r "<bundle-id>@<version>+<build>"
+
+# Send breadcrumbs from a log file (last 100 lines)
+sentry-cli send-event -m "Crash context" --logfile /path/to/app.log --with-categories
 ```
 
-## Deploys
+`-l` levels: `debug`, `info`, `warning`, `error` (default), `fatal`
 
-### Recording Deploys
+### Logs (beta)
 
-Track when releases are deployed to environments:
+Query structured logs sent by the SDK (requires `enableLogs: true` in SDK configuration).
 
 ```bash
-# Basic deploy
-sentry-cli deploys new \
-  --release "$VERSION" \
-  -e production
+# Recent logs
+sentry-cli logs list --max-rows 20
 
-# With duration tracking
-start=$(date +%s)
-# ... deployment process ...
-now=$(date +%s)
-sentry-cli deploys new \
-  --release "$VERSION" \
-  -e production \
-  -t $((now-start))
+# Filter by level
+sentry-cli logs list --query "level:error" --max-rows 50
+
+# Live tail (streams new logs every 2 seconds)
+sentry-cli logs list --live
+
+# Live tail with custom interval
+sentry-cli logs list --live --poll-interval 5
 ```
 
-### Listing Deploys
+| Flag | Description |
+|---|---|
+| `--max-rows N` | Max entries to fetch (default: 100, max: 1000) |
+| `--query QUERY` | Filter with Sentry search syntax (e.g. `level:error`) |
+| `--live` | Stream logs continuously |
+| `--poll-interval N` | Seconds between polls in live mode (default: 2) |
+
+### Monitors (cron)
+
+Track scheduled jobs — Sentry alerts if a job doesn't check in on time or fails.
 
 ```bash
-sentry-cli deploys list --release "$VERSION"
+# List configured monitors
+sentry-cli monitors list
+
+# Wrap a command so Sentry tracks its execution
+sentry-cli monitors run <monitor-slug> -- ./run-job.sh
+
+# With schedule (creates the monitor if it doesn't exist)
+sentry-cli monitors run <monitor-slug> \
+  --schedule "0 3 * * *" \
+  --timezone "Europe/London" \
+  --checkin-margin 5 \
+  --max-runtime 30 \
+  -- ./run-job.sh
 ```
 
-## Configuration
+| Flag | Description |
+|---|---|
+| `--schedule CRON` | Crontab schedule (creates monitor if needed) |
+| `--timezone TZ` | tz database string (e.g. `Europe/London`) |
+| `--checkin-margin N` | Minutes after expected time before marking missed |
+| `--max-runtime N` | Minutes before marking timed out |
+| `-e ENV` | Environment (default: `production`) |
 
-### Verify Setup
+### Create a deploy record
 
 ```bash
-sentry-cli info
+sentry-cli deploys new --release "$VERSION" -e production
 ```
 
-### Environment Variables
-
-Set these for automatic configuration:
+### List projects and repos
 
 ```bash
-export SENTRY_ORG="my-org"
-export SENTRY_PROJECT="my-project"
-export SENTRY_AUTH_TOKEN="your-token"
+# List all projects in the org
+sentry-cli projects list
+
+# List linked repositories
+sentry-cli repos list
 ```
 
-Or use config file `~/.sentryclirc`:
+Useful for verifying which projects and repos the token has access to, or checking if the repository integration is connected (needed for `releases set-commits --auto`).
 
-```ini
-[auth]
-token=your-token
-
-[defaults]
-org=my-org
-project=my-project
-```
-
-### Command-Line Flags
-
-Override config for specific commands:
+## Common iOS release workflow
 
 ```bash
-sentry-cli -o my-org -p my-project releases new "$VERSION"
-```
-
-## Common Workflows
-
-### iOS App Release
-
-```bash
-# 1. Create release
 VERSION=$(sentry-cli releases propose-version)
 sentry-cli releases new "$VERSION"
-
-# 2. Upload dSYMs after archive
 sentry-cli debug-files upload --wait "$DWARF_DSYM_FOLDER_PATH"
-
-# 3. Associate commits
 sentry-cli releases set-commits "$VERSION" --local
-
-# 4. Finalize
 sentry-cli releases finalize "$VERSION"
-
-# 5. Record deploy
 sentry-cli deploys new --release "$VERSION" -e production
 ```
-
-### Web Application Release
-
-```bash
-# 1. Create release
-VERSION=$(git rev-parse HEAD)
-sentry-cli releases new "$VERSION"
-
-# 2. Build application
-npm run build
-
-# 3. Upload source maps
-sentry-cli sourcemaps upload \
-  --url-prefix '~/static/js' \
-  --strip-common-prefix \
-  build/static/js
-
-# 4. Associate commits
-sentry-cli releases set-commits "$VERSION" --auto
-
-# 5. Finalize
-sentry-cli releases finalize "$VERSION"
-
-# 6. Record deploy
-sentry-cli deploys new --release "$VERSION" -e production
-```
-
-## Detailed Command Reference
-
-For comprehensive command syntax, options, and additional examples, see [references/commands.md](references/commands.md).
