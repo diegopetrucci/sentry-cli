@@ -1,0 +1,21 @@
+{
+  "name": "sentry-cli",
+  "version": "1.0.0",
+  "description": "Interface with Sentry's error reporting from agents.",
+  "author": {
+    "name": "Diego Petrucci",
+    "url": "https://github.com/diegopetrucci"
+  },
+  "repository": "https://github.com/diegopetrucci/sentry-cli",
+  "license": "MIT",
+  "keywords": ["sentry", "release", "debug-symbols", "source-maps"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Sentry CLI",
+    "shortDescription": "Run Sentry CLI workflows",
+    "longDescription": "Create Sentry releases, associate commits, upload debug symbols and source maps, record deploys, and verify Sentry CLI setup.",
+    "developerName": "Diego Petrucci",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Execute"]
+  }
+}
