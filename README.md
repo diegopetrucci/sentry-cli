@@ -28,6 +28,14 @@ npx skills add https://github.com/diegopetrucci/sentry-cli --skill sentry-cli
 /plugin install sentry-cli@diegopetrucci-claude-plugins
 ```
 
+### As a Codex plugin
+
+```shell
+codex plugin marketplace add diegopetrucci/ai-agents-skills
+```
+
+Restart Codex, then install `sentry-cli` from the "Diego Petrucci Agent Skills" marketplace in the plugin directory.
+
 ## Usage
 
 Trigger the skill when the user needs help with Sentry CLI workflows:
