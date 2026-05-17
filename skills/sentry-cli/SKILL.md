@@ -4,7 +4,7 @@ description: Sentry CLI tool for iOS error tracking and monitoring workflows. Us
 license: MIT
 metadata:
   author: Diego Petrucci
-  version: "2.0"
+  version: "2.1"
 ---
 
 # sentry-cli for iOS
