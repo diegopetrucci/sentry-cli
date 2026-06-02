@@ -1,6 +1,6 @@
 {
   "name": "sentry-cli",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Interface with Sentry's error reporting from agents.",
   "author": {
     "name": "Diego Petrucci",
@@ -16,6 +16,9 @@
     "longDescription": "Create Sentry releases, associate commits, upload debug symbols and source maps, record deploys, and verify Sentry CLI setup.",
     "developerName": "Diego Petrucci",
     "category": "Developer Tools",
-    "capabilities": ["Read", "Execute"]
+    "capabilities": ["Read", "Execute"],
+    "defaultPrompt": [
+      "Use sentry-cli to investigate this Sentry issue."
+    ]
   }
 }
